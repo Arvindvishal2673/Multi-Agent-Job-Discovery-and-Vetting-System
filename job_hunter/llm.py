@@ -25,25 +25,31 @@ class GroqLLM:
                 "GROQ_API_KEY is not set. Copy .env.example to .env and add your key."
             )
 
-    def _post(self, payload: dict, max_retries: int = 4) -> dict:
-        """Internal helper: POST to Groq with exponential backoff on 429."""
-        backoff = 2.0
+    def _post(self, payload: dict, max_retries: int = 6) -> dict:
+        """Internal helper: POST to Groq with exponential backoff & model fallback on 429."""
+        backoff = 3.0
+        current_payload = dict(payload)
         for attempt in range(max_retries):
             response = requests.post(
                 config.GROQ_API_URL,
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json=payload,
+                json=current_payload,
                 timeout=config.REQUEST_TIMEOUT,
             )
             if response.status_code == 429 and attempt < max_retries - 1:
-                retry_after = response.headers.get("Retry-After")
-                sleep_time = float(retry_after) if (retry_after and retry_after.isdigit()) else backoff
-                time.sleep(sleep_time)
-                backoff *= 2.0
+                # If 429 persists after 2 attempts, fallback to high-throughput llama-3.1-8b-instant model
+                if attempt >= 2 and current_payload.get("model") != "llama-3.1-8b-instant":
+                    current_payload["model"] = "llama-3.1-8b-instant"
+                
+                retry_after = response.headers.get("Retry-After") or response.headers.get("x-ratelimit-reset-requests")
+                match = re.search(r"([\d.]+)", str(retry_after)) if retry_after else None
+                sleep_time = float(match.group(1)) if match else backoff
+                time.sleep(max(sleep_time, backoff))
+                backoff *= 1.5
                 continue
             response.raise_for_status()
             return response.json()
-        response.raise_for_status()  # final raise after retries exhausted
+        response.raise_for_status()
 
     def chat(self, system: str, user: str, temperature: float = 0.2) -> str:
         """Simple single-turn chat. Returns the assistant message content."""
