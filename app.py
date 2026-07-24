@@ -88,38 +88,48 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- SESSION STATE SETUP -----------------
+# ----------------- SESSION STATE & LOG QUEUE SETUP -----------------
+GLOBAL_LOG_QUEUE = queue.Queue()
+
+def get_log_queue():
+    if "log_queue" not in st.session_state or st.session_state.log_queue is None:
+        st.session_state["log_queue"] = GLOBAL_LOG_QUEUE
+    return st.session_state.get("log_queue", GLOBAL_LOG_QUEUE)
+
 if "result" not in st.session_state:
     st.session_state.result = None
 if "logs" not in st.session_state:
     st.session_state.logs = []
 if "running" not in st.session_state:
     st.session_state.running = False
-if "log_queue" not in st.session_state:
-    st.session_state.log_queue = queue.Queue()
+st.session_state["log_queue"] = get_log_queue()
 
-# ----------------- LOGGING INTERCEPTOR -----------------
+# ----------------- COMPREHENSIVE LOGGING INTERCEPTOR -----------------
 class StreamlitLogHandler(logging.Handler):
-    def __init__(self, log_queue):
-        super().__init__()
-        self.log_queue = log_queue
-
     def emit(self, record):
-        log_entry = self.format(record)
-        self.log_queue.put(log_entry)
+        try:
+            log_entry = self.format(record)
+            GLOBAL_LOG_QUEUE.put(log_entry)
+            get_log_queue().put(log_entry)
+        except Exception:
+            pass
 
-# Avoid adding multiple duplicate handlers
+# Intercept both Root logger and job_hunter logger so ALL system, network, agent, and error logs appear live
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
 jh_logger = logging.getLogger("job_hunter")
 jh_logger.setLevel(logging.INFO)
-# Clear old custom handlers if any
-for h in list(jh_logger.handlers):
-    if h.__class__.__name__ == "StreamlitLogHandler":
-        jh_logger.removeHandler(h)
 
-handler = StreamlitLogHandler(st.session_state.log_queue)
-handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s", datefmt="%H:%M:%S"))
+for l in [root_logger, jh_logger]:
+    for h in list(l.handlers):
+        if h.__class__.__name__ == "StreamlitLogHandler":
+            l.removeHandler(h)
+
+handler = StreamlitLogHandler()
+handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s [%(name)s]: %(message)s", datefmt="%H:%M:%S"))
+root_logger.addHandler(handler)
 jh_logger.addHandler(handler)
-jh_logger.propagate = False # Prevent double printing to stdout/stderr in streamlit logs
+jh_logger.propagate = False
 
 # Helper for badges
 def get_fit_badge_html(decision):
@@ -250,6 +260,7 @@ with tab_dashboard:
         result_holder = {}
         def execution_thread():
             try:
+                logging.info("🚀 Starting ResumeJobOrchestrator pipeline execution...")
                 orchestrator = ResumeJobOrchestrator()
                 res = orchestrator.run(
                     resume_path=tmp_path,
@@ -258,8 +269,13 @@ with tab_dashboard:
                     output_path=output_path
                 )
                 result_holder["result"] = res
+                logging.info("✅ ResumeJobOrchestrator execution finished successfully.")
             except Exception as e:
-                result_holder["error"] = e
+                import traceback
+                error_traceback = traceback.format_exc()
+                logging.error("❌ CRITICAL PIPELINE FAILURE:\n%s", error_traceback)
+                result_holder["error"] = str(e)
+                result_holder["traceback"] = error_traceback
             finally:
                 try:
                     os.unlink(tmp_path)
@@ -271,16 +287,21 @@ with tab_dashboard:
         thread.start()
         
         # UI components during run
-        st.info("🤖 **Agent Pipeline is Running...** Check logs and tabs for updates!")
+        st.info("🤖 **Agent Pipeline is Running...** Live debug logs streaming below:")
         progress_bar = st.progress(0.1)
         status_text = st.empty()
         log_code_box = st.empty()
         
-        # Stream logs & wait for complete
+        # Stream logs & wait for completion safely
         while thread.is_alive():
-            # Pull any new logs
-            while not st.session_state.log_queue.empty():
-                st.session_state.logs.append(st.session_state.log_queue.get())
+            # Pull any new logs safely from both queues
+            lq = get_log_queue()
+            while not lq.empty():
+                st.session_state.logs.append(lq.get())
+            while not GLOBAL_LOG_QUEUE.empty():
+                item = GLOBAL_LOG_QUEUE.get()
+                if item not in st.session_state.logs:
+                    st.session_state.logs.append(item)
             
             # Simple progress heuristics
             log_str = "\n".join(st.session_state.logs)
@@ -303,24 +324,45 @@ with tab_dashboard:
                 progress_bar.progress(0.15)
                 status_text.write("Parsing resume and generating search terms...")
                 
-            log_code_box.code(log_str[-8000:]) # Limit visible characters for performance
+            log_code_box.code(log_str[-12000:], language="text") # Limit visible characters for performance
             time.sleep(0.2)
             
         thread.join()
         
-        # Fetch final logs
-        while not st.session_state.log_queue.empty():
-            st.session_state.logs.append(st.session_state.log_queue.get())
-        log_code_box.code("\n".join(st.session_state.logs))
+        # Fetch final logs safely
+        lq = get_log_queue()
+        while not lq.empty():
+            st.session_state.logs.append(lq.get())
+        while not GLOBAL_LOG_QUEUE.empty():
+            item = GLOBAL_LOG_QUEUE.get()
+            if item not in st.session_state.logs:
+                st.session_state.logs.append(item)
+        
+        final_log_str = "\n".join(st.session_state.logs)
+        log_code_box.code(final_log_str, language="text")
         progress_bar.progress(1.0)
         
         st.session_state.running = False
         
         if "error" in result_holder:
-            st.error(f"❌ Job search failed: {result_holder['error']}")
+            st.error(f"❌ Job search failed: **{result_holder['error']}**")
+            if "traceback" in result_holder:
+                with st.expander("🚨 View Full Python Error Traceback for Debugging"):
+                    st.code(result_holder["traceback"], language="python")
         else:
             st.success("🎉 Job Search completed successfully!")
             st.session_state.result = result_holder["result"]
+            
+    # Render log download button whenever logs exist
+    if st.session_state.logs:
+        full_logs_txt = "\n".join(st.session_state.logs)
+        st.download_button(
+            label="📥 Download Full Debug Logs (.txt)",
+            data=full_logs_txt,
+            file_name="agent_execution_debug.log",
+            mime="text/plain",
+            use_container_width=True
+        )
             
     # Show stats / summary if result exists
     if st.session_state.result:
