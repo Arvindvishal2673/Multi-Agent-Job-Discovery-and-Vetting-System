@@ -21,14 +21,15 @@ def get_secret(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 
-GROQ_API_KEY = get_secret("GROQ_API_KEY", "")
-GROQ_MODEL = get_secret("GROQ_MODEL", "llama-3.3-70b-versatile")
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+NVIDIA_API_KEY = get_secret("NVIDIA_API_KEY", "")
+NVIDIA_MODEL = get_secret("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+NVIDIA_BASE_URL = get_secret("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
 
 ADZUNA_APP_ID = get_secret("ADZUNA_APP_ID", "")
 ADZUNA_APP_KEY = get_secret("ADZUNA_APP_KEY", "")
 APIFY_API_TOKEN = get_secret("APIFY_API_TOKEN", "")
 
 
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 35
 MAX_EVALS_DEFAULT = 40

@@ -1,128 +1,58 @@
-"""PlannerAgent: uses Groq tool-calling to autonomously select job source agents.
+"""PlannerAgent: uses Chain-of-Thought (CoT) LLM reasoning to select job sources.
 
-This is the first genuinely agentic component in the pipeline. Instead of
-always querying every source, the LLM is given a menu of tools (one per
-source agent) and decides which ones are most relevant for this candidate.
+Instead of jumping blindly to a single tool call, the LLM evaluates the candidate's
+profile against EVERY available job source step-by-step, writes an evaluation,
+and activates ALL matching sources (minimum 2 sources).
 """
 
+import json
 import logging
 from typing import List
 
+from ..llm import extract_json
 from ..models import CandidateProfile
 from .base import JobSourceAgent
 
 log = logging.getLogger(__name__)
 
-# System prompt that turns the LLM into a planning agent
-PLANNER_SYSTEM = """You are an intelligent job search planning agent.
+# Chain-of-Thought System Prompt
+PLANNER_SYSTEM = """You are an expert job search planning agent operating with Chain-of-Thought reasoning.
 
-Your job is to select the best combination of job source APIs to query for
-a specific candidate. You must call the tools that are most likely to return
-high-quality, relevant results for this candidate's profile and location.
+Your task:
+Evaluate the candidate's profile against EVERY available job source API, write a brief evaluation for each, and activate ALL matching job sources.
 
-Rules:
-- Always call at least 2 tools.
-- For India-based candidates, prioritize LinkedIn (Apify) and Adzuna India.
-- For ML/AI candidates, always include LinkedIn as it has the best ML listings.
-- For remote roles, prefer Remotive and RemoteOK.
-- For recent graduates or interns, include DirectATS for company career pages.
-- You may call all tools if the profile is broad or general.
-"""
+AVAILABLE JOB SOURCES:
+1. ApifyLinkedInAgent: Essential for AI, ML, Data Science, Software Engineering, India tech, and global roles.
+2. DirectATSAgent: Essential for corporate career pages (Greenhouse, Lever), product startups, and entry/junior engineering roles.
+3. GoogleATSDorkAgent: Essential for Google Dork searches across direct ATS portals (Greenhouse, Lever, Workday, iCIMS, Ashby).
+4. AdzunaAgent: Excellent for India tech positions, mid-level engineering, and data roles.
+5. RemotiveAgent: Excellent for global remote-first software & AI roles.
+6. RemoteOKAgent: Excellent supplement for remote developer & ML positions.
+7. ArbeitnowAgent: Good for European tech roles and relocation opportunities.
 
-# Tool schema for each available source agent (OpenAI function-calling format)
-SOURCE_TOOL_SCHEMAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "activate_apify_linkedin",
-            "description": (
-                "Scrapes LinkedIn job listings via Apify cloud actors. Best for "
-                "ML, AI, Data Science, Software Engineering roles. Essential for "
-                "India-based candidates and any technical roles."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "activate_adzuna",
-            "description": (
-                "Queries the Adzuna job board REST API. Strong coverage of "
-                "India tech jobs, mid-level engineering, and data roles. "
-                "Good for both India and global positions."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "activate_direct_ats",
-            "description": (
-                "Scrapes corporate ATS systems directly (Greenhouse, Lever). "
-                "Best for top-tier tech companies (startups to FAANG). "
-                "Ideal for recent graduates targeting product companies."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "activate_remotive",
-            "description": (
-                "Queries the Remotive API for remote-first job listings. "
-                "Best for candidates seeking fully remote roles globally, "
-                "especially in software engineering, ML, and data science."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "activate_remoteok",
-            "description": (
-                "Queries the RemoteOK API for remote tech jobs. "
-                "Good supplement to Remotive for remote roles, "
-                "particularly strong for developer and ML positions."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "activate_arbeitnow",
-            "description": (
-                "Queries the Arbeitnow API for European tech jobs with visa "
-                "sponsorship. Best for candidates open to relocating to Europe "
-                "or seeking international opportunities."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-]
+SELECTION RULES:
+- You MUST evaluate EVERY available source in the "evaluations" object.
+- You MUST activate EVERY source that has non-zero matching potential for the candidate.
+- You MUST activate AT LEAST 2 sources whenever 2 or more sources are available.
+- You MUST respond with ONLY a valid JSON object matching the format below.
 
-# Maps tool function names to their source agent class names
-TOOL_NAME_TO_AGENT_CLASS = {
-    "activate_apify_linkedin": "ApifyLinkedInAgent",
-    "activate_adzuna": "AdzunaAgent",
-    "activate_direct_ats": "DirectATSAgent",
-    "activate_remotive": "RemotiveAgent",
-    "activate_remoteok": "RemoteOKAgent",
-    "activate_arbeitnow": "ArbeitnowAgent",
+RESPONSE FORMAT (JSON ONLY):
+{
+  "evaluations": {
+    "ApifyLinkedInAgent": "Explain why this matches or does not match...",
+    "DirectATSAgent": "Explain why this matches or does not match...",
+    "AdzunaAgent": "Explain why this matches or does not match..."
+  },
+  "activated_sources": [
+    "ApifyLinkedInAgent",
+    "DirectATSAgent"
+  ]
 }
+"""
 
 
 class PlannerAgent:
-    """Phase 2a: uses LLM tool-calling to autonomously select which job sources to query.
-
-    The LLM receives the candidate profile and a list of tool schemas
-    (one per source agent). It autonomously selects which sources to activate
-    based on the candidate's skills, location preference, and seniority.
-    """
+    """Phase 2a: uses Chain-of-Thought LLM reasoning to select job source agents."""
 
     def __init__(self, llm):
         self.llm = llm
@@ -133,13 +63,17 @@ class PlannerAgent:
         all_sources: List[JobSourceAgent],
         target_india_only: bool = False,
     ) -> List[JobSourceAgent]:
-        """Ask the LLM which sources to activate. Returns a filtered source list.
-
-        Falls back to using all provided sources if tool-calling fails.
-        """
-        # Build the user message with full candidate context
+        """Ask the LLM to evaluate all available sources step-by-step and select matching ones."""
         location_hint = "India only" if target_india_only else "global / remote"
-        user_msg = f"""Candidate Profile:
+        source_details = []
+        for s in all_sources:
+            cls_name = type(s).__name__
+            name = getattr(s, "name", cls_name)
+            source_details.append(f"  - {cls_name} (key: {name})")
+
+        sources_str = "\n".join(source_details)
+
+        user_msg = f"""Candidate Profile for Evaluation:
 - Summary: {profile.summary}
 - Skills: {', '.join(profile.skills[:15])}
 - Seniority: {profile.seniority}
@@ -147,35 +81,41 @@ class PlannerAgent:
 - Search Queries: {', '.join(profile.search_queries)}
 - Location Preference: {location_hint}
 
-Select the best combination of job source tools for this candidate."""
+Available Job Sources to Evaluate:
+{sources_str}
+
+Evaluate EACH of these available job sources step-by-step, write an evaluation for each, and list all matching sources in "activated_sources"."""
 
         try:
-            tool_calls = self.llm.chat_with_tools(
-                system=PLANNER_SYSTEM,
-                user=user_msg,
-                tools=SOURCE_TOOL_SCHEMAS,
-                temperature=0.0,
-            )
+            raw_response = self.llm.chat(system=PLANNER_SYSTEM, user=user_msg, temperature=0.1)
+            data = extract_json(raw_response)
+            
+            # Log Chain-of-Thought reasoning for transparency
+            evaluations = data.get("evaluations", {})
+            if isinstance(evaluations, dict) and evaluations:
+                log.info("🧠 [CoT Source Reasoning] LLM evaluated %d sources:", len(evaluations))
+                for src_name, reasoning in evaluations.items():
+                    log.info("   • %s: %s", src_name, reasoning)
+
+            selected_class_names = set(data.get("activated_sources", []))
+            log.info("📋 LLM initial source picks: %s", sorted(selected_class_names))
+
         except Exception as exc:
-            log.warning("PlannerAgent tool-calling failed: %s. Using all sources.", exc)
+            log.warning("PlannerAgent Chain-of-Thought parsing failed: %s. Using all sources.", exc)
             return all_sources
 
-        if not tool_calls:
-            log.warning("PlannerAgent: LLM returned no tool calls. Using all sources.")
-            return all_sources
-
-        # Extract which tool names the LLM selected
-        selected_names = {tc["function"]["name"] for tc in tool_calls}
-        selected_class_names = {
-            TOOL_NAME_TO_AGENT_CLASS[name]
-            for name in selected_names
-            if name in TOOL_NAME_TO_AGENT_CLASS
-        }
-
-        log.info("PlannerAgent selected sources: %s", sorted(selected_class_names))
-
-        # Filter all_sources to only those the LLM selected
+        # Match class names back to source instances
         selected = [s for s in all_sources if type(s).__name__ in selected_class_names]
 
-        # Safety: always return at least something
+        # Enforce minimum diversity rule: at least 2 sources if available
+        if len(selected) < 2 and len(all_sources) >= 2:
+            log.info("⚡ Enforcing minimum 2 sources for search diversity. Adding fallback source.")
+            for s in all_sources:
+                if s not in selected:
+                    selected.append(s)
+                    if len(selected) >= 2:
+                        break
+
+        final_names = [type(s).__name__ for s in selected]
+        log.info("✅ Final activated job sources (%d): %s", len(selected), final_names)
         return selected if selected else all_sources

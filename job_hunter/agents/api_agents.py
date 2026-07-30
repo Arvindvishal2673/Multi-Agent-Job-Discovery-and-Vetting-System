@@ -28,11 +28,15 @@ class RemotiveAgent(JobSourceAgent):
 
     def search(self, queries: List[str], max_results: int = 25) -> List[JobListing]:
         listings: List[JobListing] = []
-        try:
-            for query in queries or [""]:
-                data = requests.get(
+        for query in queries or [""]:
+            try:
+                res = requests.get(
                     self.URL, params={"search": query}, timeout=config.REQUEST_TIMEOUT
-                ).json()
+                )
+                if not res.ok:
+                    log.warning("⚠️ Remotive API returned status %d: %s", res.status_code, res.text[:200])
+                res.raise_for_status()
+                data = res.json()
                 for job in data.get("jobs", [])[:max_results]:
                     listings.append(
                         JobListing(
@@ -45,9 +49,9 @@ class RemotiveAgent(JobSourceAgent):
                             salary=job.get("salary", ""),
                         )
                     )
-        except Exception as exc:
-            log.warning("Remotive fetch failed: %s", exc)
-            return []
+            except Exception as exc:
+                err_body = getattr(getattr(exc, 'response', None), 'text', str(exc))
+                log.warning("❌ Remotive fetch failed for query %r: %s (Details: %s)", query, exc, err_body[:200])
         return listings
 
 
@@ -57,13 +61,18 @@ class RemoteOKAgent(JobSourceAgent):
 
     def search(self, queries: List[str], max_results: int = 25) -> List[JobListing]:
         try:
-            data = requests.get(
+            res = requests.get(
                 self.URL,
                 headers={"User-Agent": "job-hunter-agent"},
                 timeout=config.REQUEST_TIMEOUT,
-            ).json()
+            )
+            if not res.ok:
+                log.warning("⚠️ RemoteOK API returned status %d: %s", res.status_code, res.text[:200])
+            res.raise_for_status()
+            data = res.json()
         except Exception as exc:
-            log.warning("RemoteOK fetch failed: %s", exc)
+            err_body = getattr(getattr(exc, 'response', None), 'text', str(exc))
+            log.warning("❌ RemoteOK fetch failed: %s (Details: %s)", exc, err_body[:200])
             return []
 
         listings: List[JobListing] = []
@@ -98,9 +107,14 @@ class ArbeitnowAgent(JobSourceAgent):
 
     def search(self, queries: List[str], max_results: int = 25) -> List[JobListing]:
         try:
-            data = requests.get(self.URL, timeout=config.REQUEST_TIMEOUT).json()
+            res = requests.get(self.URL, timeout=config.REQUEST_TIMEOUT)
+            if not res.ok:
+                log.warning("⚠️ Arbeitnow API returned status %d: %s", res.status_code, res.text[:200])
+            res.raise_for_status()
+            data = res.json()
         except Exception as exc:
-            log.warning("Arbeitnow fetch failed: %s", exc)
+            err_body = getattr(getattr(exc, 'response', None), 'text', str(exc))
+            log.warning("❌ Arbeitnow fetch failed: %s (Details: %s)", exc, err_body[:200])
             return []
 
         listings: List[JobListing] = []
@@ -127,8 +141,9 @@ class AdzunaAgent(JobSourceAgent):
     name = "adzuna"
     BASE_URL = "https://api.adzuna.com/v1/api/jobs/in/search"
 
-    def search(self, queries: List[str], max_results: int = 25) -> List[JobListing]:
+    def search(self, queries: List[str], max_results: int = 25, posted_within_days: int = 1) -> List[JobListing]:
         import re
+        from datetime import datetime
         app_id = config.ADZUNA_APP_ID
         app_key = config.ADZUNA_APP_KEY
         if not app_id or not app_key:
@@ -136,53 +151,83 @@ class AdzunaAgent(JobSourceAgent):
             return []
 
         listings: List[JobListing] = []
-        try:
-            for query in queries or [""]:
-                url = f"{self.BASE_URL}/1"
-                params = {
-                    "app_id": app_id,
-                    "app_key": app_key,
-                    "results_per_page": min(max_results, 50),
-                    "what": query,
-                }
-                res = requests.get(url, params=params, timeout=config.REQUEST_TIMEOUT)
-                res.raise_for_status()
-                data = res.json()
-                for job in data.get("results", [])[:max_results]:
-                    title = job.get("title", "")
-                    title = re.sub(r"<[^>]*>", "", title).strip()
-                    
-                    company = job.get("company", {}).get("display_name", "")
-                    
-                    locations = job.get("location", {}).get("area", [])
-                    location = ", ".join(str(loc) for loc in locations) if locations else "India"
-                    
-                    desc = job.get("description", "")
-                    desc = re.sub(r"<[^>]*>", "", desc).strip()
-                    
-                    salary_min = job.get("salary_min")
-                    salary_max = job.get("salary_max")
-                    salary = ""
-                    if salary_min or salary_max:
-                        if salary_min and salary_max:
-                            salary = f"INR {salary_min:,} - {salary_max:,}"
-                        elif salary_min:
-                            salary = f"INR {salary_min:,}+"
-                        else:
-                            salary = f"INR {salary_max:,}"
-                    
-                    listings.append(
-                        JobListing(
-                            title=title,
-                            company=company,
-                            location=location,
-                            url=job.get("redirect_url", ""),
-                            source="Adzuna",
-                            description=desc[:2000],
-                            salary=salary,
-                        )
-                    )
-        except Exception as exc:
-            log.warning("Adzuna search failed: %s", exc)
-            return []
-        return listings
+        for raw_query in queries or [""]:
+            # Try original query first, and if long (>3 words), create fallback variants
+            query_candidates = [raw_query]
+            words = raw_query.split()
+            if len(words) > 3:
+                query_candidates.append(" ".join(words[:3]))
+                query_candidates.append(" ".join(words[:2]))
+
+            query_results = []
+            for query in query_candidates:
+                try:
+                    url = f"{self.BASE_URL}/1"
+                    params = {
+                        "app_id": app_id,
+                        "app_key": app_key,
+                        "results_per_page": min(max_results, 50),
+                        "what": query,
+                    }
+                    if posted_within_days and posted_within_days > 0:
+                        params["max_days_old"] = posted_within_days
+
+                    res = requests.get(url, params=params, timeout=config.REQUEST_TIMEOUT)
+                    if not res.ok:
+                        log.warning("⚠️ Adzuna API returned status %d for query %r: %s", res.status_code, query, res.text[:200])
+                    res.raise_for_status()
+                    data = res.json()
+                    results = data.get("results", [])
+                    if results:
+                        for job in results[:max_results]:
+                            title = job.get("title", "")
+                            title = re.sub(r"<[^>]*>", "", title).strip()
+                            
+                            company = job.get("company", {}).get("display_name", "")
+                            
+                            locations = job.get("location", {}).get("area", [])
+                            location = ", ".join(str(loc) for loc in locations) if locations else "India"
+                            
+                            desc = job.get("description", "")
+                            desc = re.sub(r"<[^>]*>", "", desc).strip()
+                            
+                            created_raw = job.get("created", "")
+                            posted_at = created_raw[:10] if created_raw else ""
+                            posted_ts = 0.0
+                            if created_raw:
+                                try:
+                                    posted_ts = datetime.fromisoformat(created_raw.replace("Z", "+00:00")).timestamp()
+                                except Exception:
+                                    pass
+
+                            salary_min = job.get("salary_min")
+                            salary_max = job.get("salary_max")
+                            salary = ""
+                            if salary_min or salary_max:
+                                if salary_min and salary_max:
+                                    salary = f"INR {salary_min:,} - {salary_max:,}"
+                                elif salary_min:
+                                    salary = f"INR {salary_min:,}+"
+                                else:
+                                    salary = f"INR {salary_max:,}"
+                            
+                            query_results.append(
+                                JobListing(
+                                    title=title,
+                                    company=company,
+                                    location=location,
+                                    url=job.get("redirect_url", ""),
+                                    source="Adzuna",
+                                    description=desc[:2000],
+                                    salary=salary,
+                                    posted_at=posted_at,
+                                    posted_timestamp=posted_ts,
+                                )
+                            )
+                        # If query yielded results, break out of fallback loop for this raw_query
+                        break
+                except Exception as exc:
+                    err_body = getattr(getattr(exc, 'response', None), 'text', str(exc))
+                    log.warning("❌ Adzuna search failed for query %r: %s (Details: %s)", query, exc, err_body[:200])
+            listings.extend(query_results)
+        return listings[:max_results]

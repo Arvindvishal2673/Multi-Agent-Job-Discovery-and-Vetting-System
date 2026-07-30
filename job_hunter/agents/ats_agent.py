@@ -28,7 +28,9 @@ LEVER_COMPANIES = [
 class DirectATSAgent(JobSourceAgent):
     name = "direct_ats"
 
-    def search(self, queries: List[str], max_results: int = 25) -> List[JobListing]:
+    def search(self, queries: List[str], max_results: int = 25, posted_within_days: int = 1) -> List[JobListing]:
+        import time
+        from datetime import datetime, timezone
         listings: List[JobListing] = []
         
         # Helper to do cheap overlap check
@@ -40,6 +42,18 @@ class DirectATSAgent(JobSourceAgent):
                     return True
             return not search_queries
 
+        import html
+        import re
+
+        def _clean_html(raw_text: str) -> str:
+            if not raw_text:
+                return ""
+            clean = re.sub(r"<[^>]*>", " ", raw_text)
+            clean = html.unescape(clean)
+            return re.sub(r"\s+", " ", clean).strip()
+
+        cutoff_ts = (time.time() - (posted_within_days * 86400)) if (posted_within_days and posted_within_days > 0) else 0.0
+
         # 1. Query Greenhouse boards
         for company_id, company_name in GREENHOUSE_COMPANIES:
             url = f"https://boards-api.greenhouse.io/v1/boards/{company_id}/jobs?content=true"
@@ -49,12 +63,27 @@ class DirectATSAgent(JobSourceAgent):
                     jobs = res.json().get("jobs", [])
                     for job in jobs:
                         title = job.get("title", "")
-                        content = job.get("content", "")
+                        raw_content = job.get("content", "")
+                        clean_desc = _clean_html(raw_content)
                         # Quick match check
-                        blob = f"{title} {content}"
+                        blob = f"{title} {clean_desc}"
                         if not _matches(blob, queries):
                             continue
                         
+                        updated_at = job.get("updated_at")
+                        posted_ts = 0.0
+                        posted_at = ""
+                        if updated_at:
+                            try:
+                                dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                                posted_ts = dt.timestamp()
+                                posted_at = dt.strftime("%Y-%m-%d")
+                            except Exception:
+                                pass
+
+                        if cutoff_ts > 0 and posted_ts > 0 and posted_ts < cutoff_ts:
+                            continue
+
                         listings.append(
                             JobListing(
                                 title=title,
@@ -62,11 +91,14 @@ class DirectATSAgent(JobSourceAgent):
                                 location=job.get("location", {}).get("name", "India"),
                                 url=job.get("absolute_url", ""),
                                 source="Greenhouse",
-                                description=content[:2000],
+                                description=clean_desc[:2000],
+                                posted_at=posted_at,
+                                posted_timestamp=posted_ts,
                             )
                         )
             except Exception as exc:
-                log.warning("Greenhouse direct fetch failed for %s: %s", company_name, exc)
+                err_body = getattr(getattr(exc, 'response', None), 'text', str(exc))
+                log.warning("❌ Greenhouse direct fetch failed for %s: %s (Details: %s)", company_name, exc, err_body[:200])
 
         # 2. Query Lever boards
         for company_id, company_name in LEVER_COMPANIES:
@@ -77,13 +109,27 @@ class DirectATSAgent(JobSourceAgent):
                     jobs = res.json()
                     for job in jobs:
                         title = job.get("title", "")
-                        desc = job.get("description", "")
+                        desc = _clean_html(job.get("description", ""))
                         lists = job.get("lists", [])
-                        list_text = " ".join([item.get("content", "") for sublist in lists for item in sublist.get("items", [])])
+                        list_text = " ".join([_clean_html(item.get("content", "")) for sublist in lists for item in sublist.get("items", [])])
                         blob = f"{title} {desc} {list_text}"
                         if not _matches(blob, queries):
                             continue
                         
+                        created_at_ms = job.get("createdAt")
+                        posted_ts = 0.0
+                        posted_at = ""
+                        if created_at_ms:
+                            try:
+                                dt = datetime.fromtimestamp(created_at_ms / 1000.0, tz=timezone.utc)
+                                posted_ts = dt.timestamp()
+                                posted_at = dt.strftime("%Y-%m-%d")
+                            except Exception:
+                                pass
+
+                        if cutoff_ts > 0 and posted_ts > 0 and posted_ts < cutoff_ts:
+                            continue
+
                         loc_dict = job.get("categories", {})
                         location = loc_dict.get("location", "India")
                         
@@ -95,9 +141,14 @@ class DirectATSAgent(JobSourceAgent):
                                 url=job.get("applyUrl", ""),
                                 source="Lever",
                                 description=desc[:2000],
+                                posted_at=posted_at,
+                                posted_timestamp=posted_ts,
                             )
                         )
+                else:
+                    log.warning("⚠️ Lever API returned status %d for %s: %s", res.status_code, company_name, res.text[:200])
             except Exception as exc:
-                log.warning("Lever direct fetch failed for %s: %s", company_name, exc)
+                err_body = getattr(getattr(exc, 'response', None), 'text', str(exc))
+                log.warning("❌ Lever direct fetch failed for %s: %s (Details: %s)", company_name, exc, err_body[:200])
 
         return listings[:max_results]

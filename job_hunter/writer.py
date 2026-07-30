@@ -67,15 +67,22 @@ def write_excel(
             link.hyperlink = job.url
             link.font = Font(color="0563C1", underline="single")
 
+    def _stringify(val) -> str:
+        if isinstance(val, dict):
+            return "\n".join(f"• {k.replace('_', ' ').title()}: {', '.join(v) if isinstance(v, list) else v}" for k, v in val.items())
+        if isinstance(val, list):
+            return ", ".join(str(x) for x in val)
+        return str(val or "")
+
     summary = workbook.create_sheet("Candidate Profile")
     summary.column_dimensions["A"].width = 18
     summary.column_dimensions["B"].width = 90
     profile_rows = [
-        ("Summary", profile.summary),
-        ("Seniority", profile.seniority),
-        ("Skills", ", ".join(profile.skills)),
-        ("Target Titles", ", ".join(profile.job_titles)),
-        ("Search Queries", "; ".join(profile.search_queries)),
+        ("Summary", _stringify(profile.summary)),
+        ("Seniority", _stringify(profile.seniority)),
+        ("Skills", _stringify(profile.skills)),
+        ("Target Titles", _stringify(profile.job_titles)),
+        ("Search Queries", _stringify(profile.search_queries)),
     ]
     for row, (key, value) in enumerate(profile_rows, start=1):
         summary.cell(row=row, column=1, value=key).font = Font(bold=True)

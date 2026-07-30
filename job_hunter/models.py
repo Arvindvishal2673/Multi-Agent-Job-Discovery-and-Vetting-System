@@ -14,6 +14,7 @@ class JobSearchCriteria:
     min_salary: Optional[int] = None
     max_results_per_source: int = 25
     target_india_only: bool = False
+    posted_within_days: Optional[int] = 1
 
 
 @dataclass
@@ -43,7 +44,20 @@ class JobListing:
     source: str = ""
     description: str = ""
     salary: str = ""
+    posted_at: str = ""
+    posted_timestamp: float = 0.0
     fit_score: float = 0.0
     fit_decision: str = ""
     fit_reasons: List[str] = field(default_factory=list)
     gaps_identified: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TailoredApplicationPackage:
+    """Tailored cover letter, outreach message, and ATS resume pitch generated for a job."""
+
+    cover_letter: str = ""
+    outreach_message: str = ""
+    tailored_summary: str = ""
+    key_highlights: List[str] = field(default_factory=list)
+

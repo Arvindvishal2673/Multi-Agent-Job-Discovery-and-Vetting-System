@@ -229,12 +229,13 @@ with tab_dashboard:
         st.session_state.logs = []
         st.session_state.running = True
         
-        # Clear out queue
-        while not st.session_state.log_queue.empty():
-            try:
-                st.session_state.log_queue.get_nowait()
-            except queue.Empty:
-                break
+        # Clear out queues
+        for q in [st.session_state.log_queue, GLOBAL_LOG_QUEUE]:
+            while not q.empty():
+                try:
+                    q.get_nowait()
+                except queue.Empty:
+                    break
         
         # Save uploaded file to a temporary file
         file_suffix = os.path.splitext(uploaded_file.name)[1]

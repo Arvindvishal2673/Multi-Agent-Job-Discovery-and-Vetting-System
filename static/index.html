@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hunter.ai — We Discover. We Evaluate. We Match.</title>
+    <meta name="description"
+        content="An autonomous multi-agent platform discovering top technical opportunities, parsing candidate resumes, and evaluating job fit for engineers & talent.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Lexend:wght@700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Custom CSS Design System -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    <div class="page-wrapper">
+        <div class="landing-container">
+
+            <!-- TOP NAVIGATION BAR -->
+            <header class="nuggets-navbar">
+                <a href="#" class="nuggets-brand">
+                    <div class="brand-logo-box">H</div>
+                    <span class="brand-title">Hunter.ai</span>
+                </a>
+            </header>
+
+            <!-- HERO SECTION -->
+            <section class="hero-section">
+                <h1 class="hero-headline">
+                    <span>We Source</span>
+                    <span>We Vet</span>
+                    <span>We Match</span>
+                </h1>
+
+                <div class="hero-footer-row">
+                    <p class="hero-subtext">
+                        An autonomous multi-agent platform discovering top technical opportunities, parsing candidate
+                        resumes, and scoring job fit for <span class="highlight-cpg">engineers & talent</span>. We
+                        transform your career hunt into <span class="highlight-reality">automated precision</span>.
+                    </p>
+
+                    <div class="hero-cta-group">
+                        <button class="interactive-btn" onclick="scrollToWorkspace()">
+                            <span class="btn-text-default">
+                                <span>Start Agent</span>
+                                <span class="btn-dot"></span>
+                            </span>
+                            <div class="btn-hover-layer">
+                                <span>Start Agent</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                            <div class="btn-bubble"></div>
+                        </button>
+                        <button class="interactive-btn interactive-btn-secondary" onclick="scrollToWorkspace()">
+                            <span class="btn-text-default">
+                                <span>About</span>
+                                <span class="btn-dot"></span>
+                            </span>
+                            <div class="btn-hover-layer">
+                                <span>About</span>
+                                <i class="fa-solid fa-circle-info"></i>
+                            </div>
+                            <div class="btn-bubble"></div>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- INTERACTIVE AI AGENT WORKSPACE SECTION -->
+            <section class="agent-workspace-section" id="workspace">
+                <div class="workspace-header">
+                    <div class="workspace-title">
+                        <!-- Icon slot: Add your new icon here -->
+                        <h3>Hunter.ai Autonomous Talent Agent</h3>
+                    </div>
+                </div>
+
+                <div class="workspace-layout">
+                    <!-- SIDEBAR: CONFIGURATION & RESUME UPLOAD -->
+                    <aside class="sidebar-card">
+                        <div style="margin-bottom: 0.5rem;">
+                            <h4 style="font-family: var(--font-display); font-size: 1.2rem; color: #FFF;"><i
+                                    class="fa-solid fa-sliders" style="color: #94A3B8;"></i> Search Config</h4>
+                            <p style="font-size: 0.8rem; color: #94A3B8;">Upload resume & set search filters</p>
+                        </div>
+
+                        <form id="search-form" class="config-form">
+                            <!-- RESUME UPLOAD DROPZONE -->
+                            <div class="form-group">
+                                <label class="form-label">Candidate Resume <span
+                                        style="color: #EF4444;">*</span></label>
+                                <div class="dropzone" id="dropzone">
+                                    <input type="file" id="resume-file" accept=".pdf,.txt,.md" hidden required>
+                                    <div class="dropzone-content" id="dropzone-content">
+                                        <i class="fa-solid fa-cloud-arrow-up"
+                                            style="font-size: 2rem; color: #64748B; margin-bottom: 0.3rem;"></i>
+                                        <span
+                                            style="font-weight: 600; font-size: 0.85rem; color: #FFF; display: block;">Drag
+                                            & drop resume</span>
+                                        <span style="font-size: 0.75rem; color: #94A3B8;">PDF, TXT, MD (Max 10MB)</span>
+                                    </div>
+                                    <div class="file-preview hidden" id="file-preview">
+                                        <i class="fa-solid fa-file-pdf file-icon"></i>
+                                        <div style="flex: 1; overflow: hidden;">
+                                            <span class="file-name" id="file-name"
+                                                style="color: #FFF; font-weight: 600; font-size: 0.85rem;">resume.pdf</span>
+                                            <span class="file-size" id="file-size"
+                                                style="color: #94A3B8; font-size: 0.75rem; display: block;">120
+                                                KB</span>
+                                        </div>
+                                        <button type="button" id="btn-remove-file"
+                                            style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 1.1rem;">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PREFERRED LOCATIONS -->
+                            <div class="form-group">
+                                <label class="form-label" for="locations">
+                                    <i class="fa-solid fa-location-dot"></i> Target Locations
+                                </label>
+                                <input type="text" id="locations" class="form-input"
+                                    placeholder="e.g. Remote, Bengaluru" value="Remote">
+                            </div>
+
+                            <!-- EXTRA KEYWORDS -->
+                            <div class="form-group">
+                                <label class="form-label" for="keywords">
+                                    <i class="fa-solid fa-tags"></i> Focus Keywords
+                                </label>
+                                <input type="text" id="keywords" class="form-input" placeholder="e.g. PyTorch, FastAPI">
+                            </div>
+
+                            <!-- MIN SALARY & MAX EVALS -->
+                            <div style="display: flex; gap: 0.75rem;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label class="form-label" for="min-salary"><i class="fa-solid fa-dollar-sign"></i>
+                                        Min $</label>
+                                    <input type="number" id="min-salary" class="form-input" value="0">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label class="form-label" for="max-evals"><i class="fa-solid fa-layer-group"></i>
+                                        Max Evals</label>
+                                    <input type="number" id="max-evals" class="form-input" value="15">
+                                </div>
+                            </div>
+
+                            <!-- TOGGLES -->
+                            <div
+                                style="display: flex; flex-direction: column; gap: 0.5rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.75rem;">
+                                <label
+                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; color: #FFF;">
+                                    <input type="checkbox" id="remote-only" checked> Remote Roles Only
+                                </label>
+                                <label
+                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; color: #FFF;">
+                                    <input type="checkbox" id="target-india-only" checked> Target India Tech Portals
+                                </label>
+                            </div>
+
+                            <!-- DATE POSTED FILTER -->
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label class="form-label" for="posted-within">
+                                    <i class="fa-solid fa-clock"></i> Date Posted
+                                </label>
+                                <select id="posted-within" class="form-input" style="background-color: #0F172A; color: #FFF; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px;">
+                                    <option value="1" selected>🔥 Past 24 Hours (Recommended)</option>
+                                    <option value="3">⚡ Past 3 Days</option>
+                                    <option value="7">📅 Past Week</option>
+                                    <option value="0">🌐 Any Time</option>
+                                </select>
+                            </div>
+
+                            <!-- SUBMIT BUTTON -->
+                            <button type="submit" id="btn-start" style="width: 100%; font-size: 0.95rem; font-weight: 700; padding: 0.85rem 1.25rem; border-radius: 8px;">
+                                Launch AI Job Agent
+                            </button>
+                        </form>
+                    </aside>
+
+                    <!-- MAIN WORKSPACE CONTENT -->
+                    <main class="workspace-main">
+
+
+                        <!-- DYNAMIC PIPELINE STEPPER -->
+                        <div class="stepper-card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                    <div class="pipeline-icon-glow"><i class="fa-solid fa-diagram-next"></i></div>
+                                    <h4
+                                        style="font-family: var(--font-display); font-size: 1.05rem; color: #FFF; font-weight: 700;">
+                                        Live Agent Execution Pipeline</h4>
+                                </div>
+                                <div class="phase-pill" id="phase-pill">
+                                    <span class="phase-pulse-dot"></span>
+                                    <span id="current-phase-text">Phase 1: Resume Analysis</span>
+                                </div>
+                            </div>
+                            <div class="stepper">
+                                <div class="step step-active" id="step-1">
+                                    <div class="step-circle" id="circle-1"><i class="fa-solid fa-file-user"></i></div>
+                                    <span class="step-label">Resume</span>
+                                    <span class="step-subtext" id="subtext-1">Parsing Skills</span>
+                                </div>
+                                <div class="step-line" id="line-1"></div>
+                                <div class="step" id="step-2">
+                                    <div class="step-circle" id="circle-2"><i class="fa-solid fa-compass"></i></div>
+                                    <span class="step-label">Strategy</span>
+                                    <span class="step-subtext" id="subtext-2">Waiting</span>
+                                </div>
+                                <div class="step-line" id="line-2"></div>
+                                <div class="step" id="step-3">
+                                    <div class="step-circle" id="circle-3"><i class="fa-solid fa-network-wired"></i>
+                                    </div>
+                                    <span class="step-label">Ingest</span>
+                                    <span class="step-subtext" id="subtext-3">Waiting</span>
+                                </div>
+                                <div class="step-line" id="line-3"></div>
+                                <div class="step" id="step-4">
+                                    <div class="step-circle" id="circle-4"><i class="fa-solid fa-brain"></i></div>
+                                    <span class="step-label">LLM Vetting</span>
+                                    <span class="step-subtext" id="subtext-4">Waiting</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BEHIND THE SCENES AGENT ACTIVITY STREAM -->
+                        <div class="agent-activity-card">
+                            <div class="activity-header">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div class="agent-avatar-glow"><i class="fa-solid fa-microchip"></i></div>
+                                    <div>
+                                        <h4
+                                            style="color: #FFF; font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                                            Behind the Scenes — AI Agent Activity
+                                        </h4>
+                                        <p style="font-size: 0.73rem; color: #94A3B8;">Real-time AI thought process &
+                                            multi-agent execution</p>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                    <span id="log-count" class="activity-counter">0 events</span>
+                                    <input type="text" id="terminal-filter" placeholder="Filter stream..."
+                                        style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: #FFF; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; width: 110px;">
+                                    <button id="btn-autoscroll" class="activity-tool-btn active" title="Autoscroll"><i
+                                            class="fa-solid fa-angles-down"></i></button>
+                                    <button id="btn-copy-logs" class="activity-tool-btn" title="Copy Activity Stream"><i
+                                            class="fa-solid fa-copy"></i></button>
+                                    <button id="btn-clear-logs" class="activity-tool-btn" title="Clear Stream"><i
+                                            class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- CHAT-LIKE ACTIVITY FEED CONTAINER -->
+                            <div class="activity-feed" id="terminal-body">
+                                <div class="activity-item activity-system">
+                                    <div class="item-avatar avatar-system"><i class="fa-solid fa-bolt"></i></div>
+                                    <div class="item-content">
+                                        <div class="item-meta">
+                                            <span class="agent-name">Hunter.ai Orchestrator</span>
+                                            <span class="item-time">Ready</span>
+                                        </div>
+                                        <div class="item-bubble">
+                                            Welcome! Upload candidate resume and click <strong>Launch AI Job
+                                                Agent</strong> to watch multi-agent autonomous job discovery & LLM match
+                                            vetting in action.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- LIVE ANIMATED THINKING BAR -->
+                            <div class="agent-thinking-bar hidden" id="agent-thinking-bar">
+                                <div class="thinking-avatar">
+                                    <i class="fa-solid fa-robot fa-spin"></i>
+                                </div>
+                                <div class="thinking-details">
+                                    <div class="thinking-status" id="thinking-status-text">AI Agents initializing search
+                                        pipeline...</div>
+                                    <div class="typing-dots">
+                                        <span></span><span></span><span></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- DASHBOARD TABS -->
+                        <div class="tabs-header">
+                            <button class="tab-btn active" data-tab="tab-summary"><i class="fa-solid fa-chart-pie"></i>
+                                Executive Metrics</button>
+                            <button class="tab-btn" data-tab="tab-jobs"><i class="fa-solid fa-list-check"></i> Vetted
+                                Matches (<span id="tab-job-count">0</span>)</button>
+                            <button class="tab-btn" data-tab="tab-profile">Candidate Profile</button>
+                        </div>
+
+                        <!-- TAB 1: EXECUTIVE SUMMARY -->
+                        <div class="tab-content active" id="tab-summary">
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-icon icon-blue"><i
+                                            class="fa-solid fa-magnifying-glass-location"></i></div>
+                                    <div>
+                                        <div class="metric-value" id="m-found">0</div>
+                                        <div class="metric-label">Total Found</div>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon icon-purple"><i class="fa-solid fa-filter"></i></div>
+                                    <div>
+                                        <div class="metric-value" id="m-evaluated">0</div>
+                                        <div class="metric-label">Evaluated</div>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon icon-green"><i class="fa-solid fa-award"></i></div>
+                                    <div>
+                                        <div class="metric-value" id="m-strong">0</div>
+                                        <div class="metric-label">Strong Fits</div>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon icon-amber"><i class="fa-solid fa-stopwatch"></i></div>
+                                    <div>
+                                        <div class="metric-value" id="m-time">0s</div>
+                                        <div class="metric-label">Time Elapsed</div>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon icon-teal"><i class="fa-solid fa-cubes"></i></div>
+                                    <div>
+                                        <div class="metric-value" id="m-sources">0</div>
+                                        <div class="metric-label">Sources Picked</div>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon icon-rose"><i class="fa-solid fa-rotate"></i></div>
+                                    <div>
+                                        <div class="metric-value" id="m-react">0</div>
+                                        <div class="metric-label">ReAct Iterations</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- EXCEL DOWNLOAD ACTION BANNER -->
+                            <div class="card action-banner hidden" id="action-banner"
+                                style="background: #1E293B; border: 1px solid #334155; padding: 1.25rem; border-radius: 16px; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h4 style="color: #FFF; font-family: var(--font-display);"><i
+                                            class="fa-file-excel fa-regular"
+                                            style="color: #10B981; font-size: 1.4rem;"></i> Excel Match Report Generated
+                                    </h4>
+                                    <p style="font-size: 0.8rem; color: #94A3B8;">Includes fit decisions, match scores,
+                                        and direct listing links.</p>
+                                </div>
+                                <a id="btn-download-excel" href="#" download
+                                    style="background: #059669; color: #FFF; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 12px; font-weight: 700; font-size: 0.88rem;">
+                                    <i class="fa-solid fa-download"></i> Download Excel (.xlsx)
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: VETTED JOB MATCHES -->
+                        <div class="tab-content" id="tab-jobs">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="filter-pill active" data-filter="all"
+                                        style="background: #FFF; color: #000; border: none; padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">All
+                                        Jobs</button>
+                                    <button class="filter-pill" data-filter="Strong Fit"
+                                        style="background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">Strong
+                                        Fit</button>
+                                    <button class="filter-pill" data-filter="Decent Fit"
+                                        style="background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">Decent
+                                        Fit</button>
+                                    <button class="filter-pill" data-filter="Weak Fit"
+                                        style="background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">Weak
+                                        Fit</button>
+                                </div>
+                                <input type="text" id="job-search-input" placeholder="Search title or company..."
+                                    style="background: rgba(8,12,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #FFF; padding: 0.4rem 0.8rem; border-radius: 8px; font-size: 0.85rem; width: 220px;">
+                            </div>
+
+                            <div class="jobs-list" id="jobs-container">
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-inbox"></i>
+                                    <p>No job vetting results yet. Configure search settings and click "Launch AI Job
+                                        Agent".</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: CANDIDATE PROFILE -->
+                        <div class="tab-content" id="tab-profile">
+                            <div id="profile-container"
+                                style="background: rgba(18, 26, 44, 0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.5rem;">
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-user-gear"></i>
+                                    <p>Upload a resume and run search to view parsed candidate profile.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         TAILORED APPLICATION MODAL — AI-Powered Application Generator
+         ================================================================ -->
+    <div class="modal-backdrop hidden" id="tailor-modal" role="dialog" aria-modal="true" aria-labelledby="modal-job-title">
+        <div class="modal-card">
+
+            <!-- ── HEADER ── -->
+            <div class="modal-header">
+                <div class="modal-header-accent"></div>
+                <div class="modal-header-content">
+                    <div class="modal-header-left">
+                        <div class="modal-agent-icon">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        </div>
+                        <div>
+                            <span class="modal-badge">
+                                <i class="fa-solid fa-microchip"></i>
+                                AI Tailor Agent · NVIDIA Nemotron 120B
+                            </span>
+                            <h2 id="modal-job-title" class="modal-title">Tailored Application Package</h2>
+                            <p id="modal-job-company" class="modal-subtitle">
+                                <i class="fa-solid fa-building"></i>
+                                <span>Targeting Company...</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button class="modal-close-btn" id="btn-close-modal" title="Close" aria-label="Close modal">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── LOADING STATE ── -->
+            <div class="modal-loading hidden" id="modal-loading">
+                <div class="modal-loading-orb">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <h3 class="modal-loading-title">Crafting Your Application...</h3>
+                <p class="modal-loading-sub">NVIDIA Nemotron 120B is personalizing your cover letter, outreach email, and ATS resume pitch.</p>
+                <div class="modal-loading-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+
+            <!-- ── CONTENT BODY ── -->
+            <div class="modal-body" id="modal-body">
+
+                <!-- Tabs -->
+                <div class="modal-tabs" role="tablist">
+                    <button class="modal-tab active" data-modaltab="mtab-cover" role="tab">
+                        <i class="fa-solid fa-file-signature"></i>
+                        <span>Cover Letter</span>
+                    </button>
+                    <button class="modal-tab" data-modaltab="mtab-outreach" role="tab">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>Recruiter Outreach</span>
+                    </button>
+                    <button class="modal-tab" data-modaltab="mtab-ats" role="tab">
+                        <i class="fa-solid fa-bullseye"></i>
+                        <span>ATS Highlights</span>
+                    </button>
+                </div>
+
+                <!-- Tab 1: Cover Letter -->
+                <div class="modal-tab-content active" id="mtab-cover" role="tabpanel">
+                    <div class="modal-tab-header">
+                        <div class="modal-tab-label">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Personalized formal cover letter for hiring managers
+                        </div>
+                        <button class="btn-copy-asset" id="btn-copy-cover">
+                            <i class="fa-solid fa-copy"></i>
+                            <span>Copy Letter</span>
+                        </button>
+                    </div>
+                    <textarea class="asset-textarea" id="asset-cover" readonly spellcheck="false" placeholder="AI-generated cover letter will appear here..."></textarea>
+                </div>
+
+                <!-- Tab 2: Recruiter Cold Outreach -->
+                <div class="modal-tab-content" id="mtab-outreach" role="tabpanel">
+                    <div class="modal-tab-header">
+                        <div class="modal-tab-label">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Short &amp; persuasive LinkedIn / cold email message
+                        </div>
+                        <button class="btn-copy-asset" id="btn-copy-outreach">
+                            <i class="fa-solid fa-copy"></i>
+                            <span>Copy Message</span>
+                        </button>
+                    </div>
+                    <textarea class="asset-textarea asset-textarea--short" id="asset-outreach" readonly spellcheck="false" placeholder="AI-generated outreach message will appear here..."></textarea>
+                </div>
+
+                <!-- Tab 3: ATS Resume Highlights -->
+                <div class="modal-tab-content" id="mtab-ats" role="tabpanel">
+                    <div class="ats-section">
+                        <div class="ats-block">
+                            <div class="ats-block-header">
+                                <i class="fa-solid fa-align-left" style="color:#38BDF8;"></i>
+                                <h5>ATS Executive Summary</h5>
+                                <button class="btn-copy-asset btn-copy-asset--sm" id="btn-copy-summary">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span>Copy</span>
+                                </button>
+                            </div>
+                            <p id="asset-ats-summary" class="ats-summary-text"></p>
+                        </div>
+                        <div class="ats-block">
+                            <div class="ats-block-header">
+                                <i class="fa-solid fa-list-check" style="color:#34D399;"></i>
+                                <h5>Key Bullet Highlights</h5>
+                            </div>
+                            <ul id="asset-ats-highlights" class="ats-highlights-list"></ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /modal-body -->
+
+            <!-- ── FOOTER ── -->
+            <div class="modal-footer" id="modal-footer">
+                <div class="modal-footer-meta">
+                    <i class="fa-solid fa-shield-check" style="color:#34D399;"></i>
+                    <span>Generated by NVIDIA Nemotron 120B · Tailored to this specific listing</span>
+                </div>
+                <button class="btn-modal-regenerate hidden" id="btn-regenerate">
+                    <i class="fa-solid fa-rotate-right"></i> Regenerate
+                </button>
+            </div>
+
+        </div><!-- /modal-card -->
+    </div><!-- /modal-backdrop -->
+
+    <!-- Page Scroll Helper -->
+    <script>
+        function scrollToWorkspace() {
+            document.getElementById("workspace").scrollIntoView({ behavior: "smooth" });
+        }
+    </script>
+    <!-- Custom SPA JS -->
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

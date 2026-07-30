@@ -18,7 +18,7 @@ from ..models import CandidateProfile, JobListing
 
 log = logging.getLogger(__name__)
 
-MAX_REACT_ITERATIONS = 3  # Maximum number of search-reflect cycles
+MAX_REACT_ITERATIONS = 2  # Maximum search-reflect cycles (2 for speed + quality)
 
 REFLECT_SYSTEM = """You are a critical job search quality evaluator operating in a ReAct (Reason + Act) loop.
 

@@ -56,16 +56,25 @@ class ResumeAnalyzer:
 
     def analyze(self, path) -> CandidateProfile:
         raw = self.extract_text(path)
-        log.info("Extracted %d characters from resume. Content:\n%s", len(raw), raw)
+        log.info("📄 Extracted %d characters from resume.", len(raw))
+        log.debug("Resume Content:\n%s", raw)
         response = self.llm.chat(
             system=PROFILE_SYSTEM,
             user=PROFILE_PROMPT.format(resume=raw[:50000]),
         )
         data = extract_json(response)
+        summary_raw = data.get("summary", "")
+        if isinstance(summary_raw, dict):
+            summary_str = "\n".join(f"• {k.replace('_', ' ').title()}: {', '.join(v) if isinstance(v, list) else v}" for k, v in summary_raw.items())
+        elif isinstance(summary_raw, list):
+            summary_str = " ".join(str(s) for s in summary_raw)
+        else:
+            summary_str = str(summary_raw or "")
+
         return CandidateProfile(
-            summary=data.get("summary", ""),
+            summary=summary_str,
             skills=[str(s).strip() for s in data.get("skills", [])],
-            seniority=data.get("seniority", "Unknown"),
+            seniority=str(data.get("seniority", "Unknown")),
             job_titles=[str(t) for t in data.get("job_titles", [])],
             raw_text=raw,
         )

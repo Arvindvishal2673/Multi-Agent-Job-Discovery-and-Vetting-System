@@ -42,6 +42,8 @@ class MatchVettingAgent:
         self.llm = llm
 
     def evaluate(self, profile: CandidateProfile, listing: JobListing) -> JobListing:
+        import time
+        time.sleep(4.0)  # Pace evaluation requests to stay strictly under 15 RPM Free Tier limit
         prompt = EVAL_PROMPT.format(
             summary=profile.summary,
             seniority=profile.seniority,
@@ -59,8 +61,9 @@ class MatchVettingAgent:
             listing.fit_decision = decision if decision in VALID_DECISIONS else FALLBACK_DECISION
             listing.fit_reasons = [str(r) for r in data.get("fit_reasons", [])][:5]
             listing.gaps_identified = [str(g) for g in data.get("gaps_identified", [])][:5]
+            log.info("⭐ Match Score: %.0f/100 (%s) → %s @ %s", listing.fit_score, listing.fit_decision, listing.title, listing.company or 'N/A')
         except Exception as exc:  # JSON errors / API limits must not crash the run
-            log.warning("Evaluation failed for %r: %s", listing.title, exc)
+            log.warning("❌ Job evaluation failed for %r: %s", listing.title, exc)
             listing.fit_score = 0.0
             listing.fit_decision = FALLBACK_DECISION
         return listing

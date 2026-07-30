@@ -11,6 +11,7 @@ from job_hunter.agents.resume_analyzer import ResumeAnalyzer
 from job_hunter.agents.search_strategy import SearchStrategyAgent
 from job_hunter.agents.vetting import MatchVettingAgent
 from job_hunter.llm import extract_json
+from job_hunter.agents.ranker import HybridRanker
 from job_hunter.models import CandidateProfile, JobListing, JobSearchCriteria
 from job_hunter.orchestrator import ResumeJobOrchestrator
 from job_hunter.writer import write_excel
@@ -200,7 +201,8 @@ class TestOrchestratorLogic:
             JobListing(title="Bakery Assistant", description="bread and pastries"),
             JobListing(title="Senior Python Developer", description="Django REST APIs"),
         ]
-        ranked = ResumeJobOrchestrator.prefilter(jobs, make_profile(), JobSearchCriteria())
+        ranker = HybridRanker()
+        ranked = ranker.rank(jobs, make_profile(), JobSearchCriteria(), top_k=10)
         assert ranked[0].title == "Senior Python Developer"
 
     def test_prefilter_remote_only_filters_offices(self):
@@ -208,11 +210,27 @@ class TestOrchestratorLogic:
             JobListing(title="Python Developer", location="Berlin office"),
             JobListing(title="Python Developer", location="Remote"),
         ]
-        ranked = ResumeJobOrchestrator.prefilter(
-            jobs, make_profile(), JobSearchCriteria(remote_only=True)
+        ranker = HybridRanker()
+        ranked = ranker.rank(
+            jobs, make_profile(), JobSearchCriteria(remote_only=True), top_k=10
         )
         assert ranked
         assert all("remote" in job.location.lower() for job in ranked)
+
+    def test_prefilter_min_salary_filters_low_salaries(self):
+        jobs = [
+            JobListing(title="Junior Python Dev", description="Python", salary="$40,000"),
+            JobListing(title="Senior Python Dev", description="Python", salary="$120,000"),
+            JobListing(title="Lead Python Dev", description="Python", salary=""),  # empty kept
+        ]
+        ranker = HybridRanker()
+        ranked = ranker.rank(
+            jobs, make_profile(), JobSearchCriteria(min_salary=80000), top_k=10
+        )
+        titles = [j.title for j in ranked]
+        assert "Junior Python Dev" not in titles
+        assert "Senior Python Dev" in titles
+        assert "Lead Python Dev" in titles
 
 
 class TestUtilities:
@@ -235,3 +253,22 @@ class TestUtilities:
         )
         out = write_excel(make_profile(), [job], str(tmp_path / "out.xlsx"))
         assert Path(out).exists()
+
+    def test_get_default_llm_selects_nvidia_when_key_present(self):
+        with patch("job_hunter.config.NVIDIA_API_KEY", "mock_nvidia_key"):
+            from job_hunter.llm import get_default_llm, NvidiaLLM
+            llm = get_default_llm()
+            assert isinstance(llm, NvidiaLLM)
+
+    def test_nvidia_llm_chat_calls_api(self):
+        with patch("job_hunter.config.NVIDIA_API_KEY", "mock_nvidia_key"):
+            from job_hunter.llm import NvidiaLLM
+            llm = NvidiaLLM()
+            mock_chunk = MagicMock()
+            mock_chunk.choices = [MagicMock()]
+            mock_chunk.choices[0].delta.content = "Hello from NVIDIA NIM"
+            mock_chunk.choices[0].delta.reasoning_content = None
+            with patch.object(llm.client.chat.completions, "create", return_value=[mock_chunk]):
+                reply = llm.chat("system", "user")
+                assert reply == "Hello from NVIDIA NIM"
+

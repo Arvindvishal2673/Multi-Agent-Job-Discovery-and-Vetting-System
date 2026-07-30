@@ -18,8 +18,9 @@ class ApifyLinkedInAgent(JobSourceAgent):
 
     name = "apify_linkedin"
 
-    def __init__(self, target_india_only: bool = False):
+    def __init__(self, target_india_only: bool = False, default_location: str = ""):
         self.target_india_only = target_india_only
+        self.default_location = default_location
 
     def search(self, queries: List[str], max_results: int = 25) -> List[JobListing]:
         token = config.APIFY_API_TOKEN
@@ -35,7 +36,12 @@ class ApifyLinkedInAgent(JobSourceAgent):
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={token}"
         
         # Determine target location based on criteria
-        location = "India" if self.target_india_only else "United States"
+        if self.target_india_only:
+            location = "India"
+        elif self.default_location:
+            location = self.default_location
+        else:
+            location = "United States"
 
         import urllib.parse
         urls = []
@@ -47,7 +53,7 @@ class ApifyLinkedInAgent(JobSourceAgent):
         payload = {
             "urls": urls,
             "scrapeCompany": False,
-            "count": max_results,
+            "count": max(max_results, 10),
             "splitByLocation": False
         }
 
@@ -57,7 +63,9 @@ class ApifyLinkedInAgent(JobSourceAgent):
             res.raise_for_status()
             run_data = res.json().get("data", {})
         except Exception as exc:
-            log.warning("Failed to trigger Apify actor: %s", exc)
+            err_details = getattr(exc, 'response', None)
+            err_text = err_details.text if err_details is not None else str(exc)
+            log.warning("Failed to trigger Apify actor: %s (Details: %s)", exc, err_text)
             return []
 
         run_id = run_data.get("id")
@@ -72,7 +80,7 @@ class ApifyLinkedInAgent(JobSourceAgent):
         poll_interval = 5
         elapsed = 0
 
-        log.info("Apify actor run %s started. Polling status...", run_id)
+        log.info("🚀 [Apify LinkedIn Agent] Triggered cloud scraper run %s (location: %s).", run_id, location)
         while elapsed < max_poll_time:
             try:
                 status_res = requests.get(status_url, timeout=config.REQUEST_TIMEOUT)
@@ -85,19 +93,20 @@ class ApifyLinkedInAgent(JobSourceAgent):
                 continue
 
             status = run_status.get("status")
-            log.debug("Apify run status: %s", status)
+            if elapsed == 0 or elapsed % 10 == 0 or status == "SUCCEEDED":
+                log.info("⏳ [Apify LinkedIn Scraper] Polling status: %s (%ds elapsed)...", status, elapsed)
 
             if status == "SUCCEEDED":
-                log.info("Apify run completed successfully.")
+                log.info("✅ [Apify LinkedIn Scraper] Cloud run completed successfully!")
                 break
             elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
-                log.warning("Apify actor run failed with status: %s", status)
+                log.warning("❌ [Apify LinkedIn Scraper] Run failed with status: %s", status)
                 return []
 
             time.sleep(poll_interval)
             elapsed += poll_interval
         else:
-            log.warning("Apify run timed out before completion after %d seconds.", max_poll_time)
+            log.warning("❌ [Apify LinkedIn Scraper] Timed out after %d seconds.", max_poll_time)
             return []
 
         # Retrieve items from the dataset
