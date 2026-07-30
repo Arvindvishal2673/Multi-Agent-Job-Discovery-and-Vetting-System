@@ -34,6 +34,8 @@ RUN groupadd -g 1001 appgroup && \
 COPY --from=builder /root/.local /home/appuser/.local
 COPY --chown=appuser:appgroup . .
 
+RUN mkdir -p /app/outputs && chown -R appuser:appgroup /app
+
 ENV PATH=/home/appuser/.local/bin:$PATH
 
 USER appuser
